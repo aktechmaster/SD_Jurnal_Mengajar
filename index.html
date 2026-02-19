@@ -322,7 +322,7 @@
 
         <div class="input-group">
             <label>Mapel</label>
-            <select id="mapel" class="form-control" required><option>Loading Data...</option></select>
+            <select id="mapel" class="form-control" required onchange="toggleMapel()"><option>Loading Data...</option></select>
         </div>
 
         <div class="input-group">
@@ -533,6 +533,29 @@
         });
     });
 
+    function toggleMapel() {
+    const mapel = document.getElementById('mapel').value;
+    const listSiswaArea = document.getElementById('student-list').parentElement;
+    const catatanLabel = document.querySelector('label[for="catatan"]') || document.querySelector('.input-group label:last-of-type');
+    const inputCatatan = document.getElementById('catatan');
+    
+    // Daftar mapel khusus
+    const mapelKhusus = ["Tahfidz", "Tahsin", "BPI"];
+
+    if (mapelKhusus.includes(mapel)) {
+        // Sembunyikan Area Presensi
+        listSiswaArea.style.display = "none";
+        // Ubah Label Catatan
+        catatanLabel.innerText = "JUMLAH SISWA";
+        inputCatatan.placeholder = "Masukkan jumlah siswa...";
+    } else {
+        // Tampilkan Kembali
+        listSiswaArea.style.display = "block";
+        catatanLabel.innerText = "CATATAN";
+        inputCatatan.placeholder = "-";
+    }
+}
+
     // 2. Load Siswa
     function loadSiswa() {
         let kls = document.getElementById('kelas').value;
@@ -561,54 +584,69 @@
     }
 
     // 3. Kirim Data
-    function kirimData() {
-        const emailVal = document.getElementById('emailGuru').value;
-        if(!emailVal) { alert("Harap isi Email untuk pengiriman bukti!"); return; }
+function kirimData() {
+    const emailVal = document.getElementById('emailGuru').value;
+    const currentMapel = document.getElementById('mapel').value;
+    
+    // Daftar mapel yang tidak perlu presensi individu
+    const mapelTanpaSiswa = ["Tahfidz", "Tahsin", "BPI"];
 
-        if(!confirm('Data sudah benar? Kirim sekarang?')) return;
+    if(!emailVal) { alert("Harap isi Email untuk pengiriman bukti!"); return; }
+    if(!confirm('Data sudah benar? Kirim sekarang?')) return;
 
-        let btn = document.getElementById('btnKirim');
-        btn.innerHTML = '<span class="loader"></span> SENDING...';
-        btn.disabled = true;
+    let btn = document.getElementById('btnKirim');
+    btn.innerHTML = '<span class="loader"></span> SENDING...';
+    btn.disabled = true;
 
-        let data = {
-            email: emailVal,
-            guru: document.getElementById('guru').value,
-            mapel: document.getElementById('mapel').value,
-            kelas: document.getElementById('kelas').value,
-            pertemuan: document.getElementById('pertemuan').value,
-            // Mengambil semua media yang dicentang lalu digabung koma
-            media: Array.from(document.querySelectorAll('input[name="media_alat"]:checked'))
-                   .map(cb => cb.value).join(", ") || "-",
-            materi: document.getElementById('materi').value,
-            kegiatan: document.getElementById('kegiatan').value,
-            catatan: document.getElementById('catatan').value,
-            waktu: [],
-            absensiData: []
-        };
+    let data = {
+        email: emailVal,
+        guru: document.getElementById('guru').value,
+        mapel: currentMapel,
+        kelas: document.getElementById('kelas').value,
+        pertemuan: document.getElementById('pertemuan').value,
+        media: Array.from(document.querySelectorAll('input[name="media_alat"]:checked'))
+                .map(cb => cb.value).join(", ") || "-",
+        materi: document.getElementById('materi').value,
+        kegiatan: document.getElementById('kegiatan').value,
+        catatan: document.getElementById('catatan').value, // Ini akan berisi "Jumlah Siswa" jika mapel khusus
+        waktu: [],
+        absensiData: [] // Default kosong
+    };
 
-        document.querySelectorAll('input[name="waktu"]:checked').forEach(cb => data.waktu.push(cb.value));
+    // Ambil Jam Ke
+    document.querySelectorAll('input[name="waktu"]:checked').forEach(cb => data.waktu.push(cb.value));
+
+    // LOGIKA POIN 3: Hanya ambil data presensi jika BUKAN mapel khusus
+    if (!mapelTanpaSiswa.includes(currentMapel)) {
         document.querySelectorAll('.absen-select').forEach(sel => {
-            data.absensiData.push({ nama: sel.getAttribute('data-nama'), status: sel.value });
+            data.absensiData.push({ 
+                nama: sel.getAttribute('data-nama'), 
+                status: sel.value 
+            });
         });
-
-        let fileInput = document.getElementById('buktiKBM');
-        if(fileInput.files.length > 0) {
-            let reader = new FileReader();
-            reader.readAsDataURL(fileInput.files[0]);
-            reader.onload = function(e) {
-                data.fileData = reader.result.split(',')[1];
-                data.fileName = fileInput.files[0].name;
-                data.mimeType = fileInput.files[0].type;
-                kirimKeGoogle(data, btn);
-            }
-        } else {
-            alert("Wajib upload Foto Bukti KBM!");
-            btn.innerHTML = "UPLOAD DATA 🚀";
-            btn.disabled = false;
-        }
+    } else {
+        // Jika Mapel Khusus, absensiData tetap [] (array kosong)
+        // Backend (GS) Anda akan melakukan loop pada array kosong ini dan tidak akan error.
+        console.log("Mapel Khusus terdeteksi: Presensi individu dilewati.");
     }
 
+    // Handle File dan Pengiriman
+    let fileInput = document.getElementById('buktiKBM');
+    if(fileInput.files.length > 0) {
+        let reader = new FileReader();
+        reader.readAsDataURL(fileInput.files[0]);
+        reader.onload = function(e) {
+            data.fileData = reader.result.split(',')[1];
+            data.fileName = fileInput.files[0].name;
+            data.mimeType = fileInput.files[0].type;
+            kirimKeGoogle(data, btn);
+        }
+    } else {
+        alert("Wajib upload Foto Bukti KBM!");
+        btn.innerHTML = "UPLOAD DATA 🚀";
+        btn.disabled = false;
+    }
+}
     function kirimKeGoogle(payload, btn) {
         fetch(SCRIPT_URL, {
             method: "POST",
